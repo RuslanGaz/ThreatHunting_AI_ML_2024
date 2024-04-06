@@ -83,7 +83,7 @@ merged_tabs_df <- merge(max_ips_traffic_by_ports, awerage_traffic_on_all_ports, 
 anomaly_statistic_ip_to_port_traffic <- merged_tabs_df |> mutate(average_anomaly = bytes_ip_port/average_port_traffic) |> arrange(desc(average_anomaly)) |> head(1)
 anomaly_statistic_ip_to_port_traffic
 ```
-###Ответ: 12.30.96.87
+### Ответ: 12.30.96.87
 
 ## Вывод
 
