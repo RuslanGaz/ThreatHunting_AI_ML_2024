@@ -1,0 +1,90 @@
+Лабораторная работа №3
+======================
+Газиков Р.А.
+
+## Цель Работы
+
+1.  Изучить возможности технологии Apache Arrow для обработки и анализ больших данных
+2.  Получить навыки применения Arrow совместно с языком программирования R
+3.  Получить навыки анализа метаинфомации о сетевом трафике
+4.  Получить навыки применения облачных технологий хранения, подготовки и анализа данных: Yandex Object Storage, Rstudio Server.
+
+## Ход работы
+
+## Подключение arrow
+
+```{r}
+library(dplyr)
+library(tidyverse)
+library(arrow)
+curl::multi_download(
+    "https://storage.yandexcloud.net/arrow-datasets/tm_data.pqt",
+     "data/tm_data.pqt",
+  resume = TRUE
+)
+df <- arrow::open_dataset('data/tm_data.pqt')
+```
+
+## Задание 1
+
+Важнейшие документы с результатами нашей исследовательской деятельности в
+области создания вакцин скачиваются в виде больших заархивированных дампов.
+Один из хостов в нашей сети используется для пересылки этой информации – он
+пересылает гораздо больше информации на внешние ресурсы в Интернете, чем
+остальные компьютеры нашей сети. Определите его IP-адрес.
+
+```{r}
+out_traffic <- df  |> select(src, dst, bytes) |> filter(!str_detect(dst, '1[2-4].*')) |> group_by(src) |> summarise(bytes_amount = sum(bytes)) |> arrange(desc(bytes_amount)) |> collect()
+out_traffic |> head(1)
+```
+### Ответ: 13.37.84.125
+
+## Задание 2
+
+Другой атакующий установил автоматическую задачу в системном планировщике
+cron для экспорта содержимого внутренней wiki системы. Эта система генерирует
+большое количество трафика в нерабочие часы, больше чем остальные хосты.
+Определите IP этой системы. Известно, что ее IP адрес отличается от нарушителя из
+предыдущей задачи.
+
+### Поиск не рабочих часов
+
+```{r}
+library(lubridate)
+df_normaltime_by_traffic_size <- df |> select(timestamp, src, dst, bytes) |> filter(!str_detect(dst, '1[2-4].*')) |> mutate(timestamp = hour(as_datetime(timestamp/1000))) |> group_by(timestamp) |> summarize(traffic_size = sum(bytes)) |> arrange(desc(traffic_size))
+df_normaltime_by_traffic_size |>м collect() |> print(n = Inf)
+```
+### Поиск IP
+
+```{R}
+df_traffic_no_worktime_anomaly <- df |> select(timestamp, src, dst, bytes) |> mutate(timestamp = hour(as_datetime(timestamp/1000))) |> filter(!str_detect(dst, '1[2-4].*') & timestamp >= 0 & timestamp <= 15)  |> group_by(src) |> summarise(bytes_amount = sum(bytes)) |> arrange(desc(bytes_amount)) |> collect()
+df_traffic_no_worktime_anomaly |> filter(src != '13.37.84.125') |> head(1)
+```
+
+### Ответ: 12.55.77.96
+
+## Задание 3
+
+Еще один нарушитель собирает содержимое электронной почты и отправляет в
+Интернет используя порт, который обычно используется для другого типа трафика.
+Атакующий пересылает большое количество информации используя этот порт,
+которое нехарактерно для других хостов, использующих этот номер порта.
+Определите IP этой системы. Известно, что ее IP адрес отличается от нарушителей
+из предыдущих задач.
+
+```{r}
+
+awerage_traffic_on_all_ports <- df |> select(timestamp, src, dst, port, bytes) |> filter(!str_detect(dst, '1[2-4].')) |> group_by(src, port) |> summarise(bytes_ip_port = sum(bytes)) |> group_by(port) |> summarise(average_port_traffic = mean(bytes_ip_port)) |> arrange(desc(average_port_traffic)) |> collect()
+
+max_ips_traffic_by_ports <- df |> select(timestamp, src, dst, port, bytes) |> filter(!str_detect(dst, '1[2-4].')) |> group_by(src, port) |> summarise(bytes_ip_port = sum(bytes)) |> collect() |> group_by(port) |> top_n(1, bytes_ip_port) |> arrange(desc(bytes_ip_port))
+
+merged_tabs_df <- merge(max_ips_traffic_by_ports, awerage_traffic_on_all_ports, by = "port")
+
+anomaly_statistic_ip_to_port_traffic <- merged_tabs_df |> mutate(average_anomaly = bytes_ip_port/average_port_traffic) |> arrange(desc(average_anomaly)) |> head(1)
+anomaly_statistic_ip_to_port_traffic
+```
+###Ответ: 12.30.96.87
+
+## Вывод
+
+Научились пользоваться технологией Apache Arrow для обработки и анализа больших данных о трафике внутренней сети компании.
